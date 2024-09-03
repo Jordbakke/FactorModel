@@ -47,7 +47,7 @@ class CustomDataset(Dataset):
         self.fundamentals = pd.read_csv(fundamentals_csv)
         self.company_description = pd.read_csv(company_description_csv)
         self.transactions = pd.read_csv(transactions_csv)
-        self.transactions = drop_first_transaction(self.transactions)
+
 
     def __len__(self):
         return len(self.transactions)
