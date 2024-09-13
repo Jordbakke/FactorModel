@@ -11,16 +11,21 @@ class PrependEmbeddingVector(nn.Module):
         batch_size = x.size(0)
         embedding_vector = self.embedding_vector.expand(batch_size, -1, -1)
         return torch.cat((embedding_vector, x), dim=1)  
-    
-class PositionalEmbedding(nn.Module):
+class PositionalEncoding(nn.Module):
     def __init__(self, embedding_dim, max_seq_len=1000):
-        super(PositionalEmbedding, self).__init__()
+        super(PositionalEncoding, self).__init__()
+        
+        if embedding_dim % 2 != 0:
+            self.original_embedding_dim = embedding_dim
+            embedding_dim = embedding_dim + 1
+            
+            
         self.embedding_dim = embedding_dim
         
         # Create positional encoding matrix using vectorized operations
         position = torch.arange(0, max_seq_len, dtype=torch.float32).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, embedding_dim, 2).float() * (-np.log(10000.0) / embedding_dim))
-        
+
         PE = torch.zeros(max_seq_len, embedding_dim, requires_grad=False)
         PE[:, 0::2] = torch.sin(position * div_term)
         PE[:, 1::2] = torch.cos(position * div_term)
@@ -29,9 +34,11 @@ class PositionalEmbedding(nn.Module):
         self.register_buffer('PE', PE)  # Register buffer for positional encoding
     
     def forward(self, x):
-        x = x + self.PE[:, :x.size(1), :]
+        if hasattr(self, "original_embedding_dim"):
+            x = x + self.PE[:, :x.size(1), :-1]
+        else:
+            x = x + self.PE[:, :x.size(1), :]
         return x
-
 class FFNN(nn.Module):
     def __init__(self, embedding_dim, hidden_dim, num_hidden_layers,
                  output_dim, activation_function=nn.GELU, dropout_prob=0.1, dropout_layer_frequency=2):
@@ -291,11 +298,12 @@ class MultiModalCombiner(nn.Module):
         transformer_output = self.encoder(aligned_tensors_with_prepended_embedding_vector)
         return transformer_output[:, :1, :]
     
-#Test the implementation
-t1 = torch.ones(3, 1, 2)
-t2 = torch.ones(3, 1, 4)
-a = MultiModalCombiner(t1, t2, num_heads=2, ffnn_hidden_dim=4, num_ffnn_hidden_layers=3, num_encoder_blocks=3, ffnn_dropout_prob=0.1, attention_dropout_prob=0.1, activation_function=nn.GELU, batch_first=True, force_inner_dimensions=True, final_dim=4)
+if __name__ == "__main__":
+    #Test the implementation
+    t1 = torch.ones(3, 1, 2)
+    t2 = torch.ones(3, 1, 4)
+    a = MultiModalCombiner(t1, t2, num_heads=2, ffnn_hidden_dim=4, num_ffnn_hidden_layers=3, num_encoder_blocks=3, ffnn_dropout_prob=0.1, attention_dropout_prob=0.1, activation_function=nn.GELU, batch_first=True, force_inner_dimensions=True, final_dim=4)
 
-# print(a(t1, t2).shape)
+    # print(a(t1, t2).shape)
 
-print(a(t1, t2))
+    print(a(t1, t2))

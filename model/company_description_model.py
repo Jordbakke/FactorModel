@@ -1,7 +1,6 @@
 import utils
 from torch import nn
 
-
 class CompanyDescriptionModel(nn.Module):
     def __init__(self, hidden_dim, num_hidden_layers, output_dim, dropout_prob, activation_function, embedding_dim = 1000):
         super(CompanyDescriptionModel, self).__init__()
@@ -11,3 +10,5 @@ class CompanyDescriptionModel(nn.Module):
         return self.ffnn(company_description_embedding)
 
 
+if __name__ == '__main__':
+    pass
