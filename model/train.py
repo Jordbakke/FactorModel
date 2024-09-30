@@ -1,44 +1,54 @@
-import torch
 import os
 import sys
-from price_model import PriceModel
-from company_description_model import CompanyDescriptionModel
-from fundamentals_model import FundamentalsModel
-from torch import nn
+import torch
+from tqdm import tqdm
 from torch.utils.data import DataLoader
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from data.custom_dataset import CustomDataset
 
-embedding_dim = 2
-num_heads = 4
-ffnn_hidden_dim = 2
-num_ffnn_hidden_layers = 3
-activation_function = nn.GELU
-ffnn_dropout_prob = 0.1
-attention_dropout_prob = 0.1
-batch_first = True
-num_transformer_blocks = 3
-max_seq_len = 1000
-prepend_embedding_vector = True
+def train(company_embedding_model, transaction_prediction_model, loss_fn, custom_dataset, num_epochs, lr, weight_decay, device, save_path, batch_size=None):
 
-price_batch = torch.ones(2, 10, 2)
-price_model = PriceModel(embedding_dim=embedding_dim, num_heads=num_heads, ffnn_hidden_dim=ffnn_hidden_dim, num_ffnn_hidden_layers=num_ffnn_hidden_layers, activation_function=activation_function,
-                ffnn_dropout_prob=ffnn_dropout_prob, attention_dropout_prob=attention_dropout_prob, batch_first=batch_first,
-                num_transformer_blocks=num_transformer_blocks, max_seq_len=max_seq_len, prepend_embedding_vector=prepend_embedding_vector)
+    dataloader = DataLoader(custom_dataset, batch_size=batch_size, shuffle=True)
+    optimizer = torch.optim.Adam(list(company_embedding_model.parameters()) + list(transaction_prediction_model.parameters()), lr=lr, weight_decay=weight_decay)
 
-#Create Fundamentals Model
-embedding_dim = 124
-num_heads = 4
-ffnn_hidden_dim=124
-num_ffnn_hidden_layers = 8
-activation_function=nn.GELU
-ffnn_dropout_prob=0.1,
-attention_dropout_prob=0.1
-batch_first=True
-num_transformer_blocks=3
-force_inner_dimensions=True
-max_seq_len=1000
-prepend_embedding_vector=False
-fundamentals_model = FundamentalsModel(embedding_dim=embedding_dim,
-                                        num_heads=num_heads, ffnn_hidden_dim=ffnn_hidden_dim, num_ffnn_hidden_layers=num_ffnn_hidden_layers, activation_function=activation_function, ffnn_dropout_prob=ffnn_dropout_prob,
-                                       attention_dropout_prob=attention_dropout_prob, batch_first=batch_first, num_transformer_blocks=num_transformer_blocks, force_inner_dimensions=force_inner_dimensions, max_seq_len=max_seq_len, prepend_embedding_vector=prepend_embedding_vector)
+    for epoch in range(num_epochs):
+        
+        for previous_transaction_companies_data, portfolio_companies_data, target_companies_data in tqdm(dataloader):
+            previous_transactions_price_batch = previous_transaction_companies_data['price']
+            previous_transactions_fundamentals_batch = previous_transaction_companies_data['fundamentals']
+            previous_transactions_company_description_batch = previous_transaction_companies_data['company_description']
+            previous_transactions_fixed_company_features_batch = previous_transaction_companies_data['fixed_company_features']
+            previous_transactions_embeddings = company_embedding_model(previous_transactions_price_batch, previous_transactions_fundamentals_batch,
+                                                                      previous_transactions_company_description_batch,
+                                                                      previous_transactions_fixed_company_features_batch)
+            
+            portfolio_companies_price_batch = portfolio_companies_data['price']
+            portfolio_companies_fundamentals_batch = portfolio_companies_data['fundamentals']
+            portfolio_companies_company_description_batch = portfolio_companies_data['company_description']
+            portfolio_companies_fixed_company_features_batch = portfolio_companies_data['fixed_company_features']
+            portfolio_companies_embeddings = company_embedding_model(portfolio_companies_price_batch, portfolio_companies_fundamentals_batch,
+                                                                    portfolio_companies_company_description_batch,
+                                                                    portfolio_companies_fixed_company_features_batch)
+            
+            target_transactions_price_batch = target_companies_data['price']
+            target_transactions_fundamentals_batch = target_companies_data['fundamentals']
+            target_transactions_company_description_batch = target_companies_data['company_description']
+            target_transactions_fixed_company_features_batch = target_companies_data['fixed_company_features']
+            target_transactions_embeddings = company_embedding_model(target_transactions_price_batch,
+                                                                              target_transactions_fundamentals_batch,
+                                                                        target_transactions_company_description_batch,
+                                                                        target_transactions_fixed_company_features_batch)
+            
+            predicted_transaction = transaction_prediction_model(previous_transactions_embeddings, portfolio_companies_embeddings)
+            
+            future_transaction_companies_embeddings = future_transaction_companies_embeddings.squeeze(1)
+
+            loss = loss_fn(predicted_transaction, future_transaction_companies_embeddings)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+
+
+
+      

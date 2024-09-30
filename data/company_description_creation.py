@@ -157,8 +157,12 @@ def plot_tsne_2d(vectors_dict):
     labels = list(vectors_dict.keys())
     vectors = np.array(list(vectors_dict.values()))
 
-    # Use t-SNE to reduce the dimensionality to 2D, set perplexity to a lower value
-    tsne = TSNE(n_components=2, perplexity=2, random_state=42)
+    # Dynamically set perplexity to be less than the number of vectors
+    n_samples = len(vectors)
+    perplexity = min(2, n_samples - 1)  # Ensure perplexity is less than n_samples
+
+    # Use t-SNE to reduce the dimensionality to 2D
+    tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
     vectors_2d = tsne.fit_transform(vectors)
 
     # Plot the 2D representation of the vectors
@@ -278,7 +282,6 @@ class CompanyDescriptionWriter:
         requests = []
 
         for transaction_unit in transaction_units:
-        
             company_name = transaction_unit["proper_name"]
             ticker_quarter_year = transaction_unit["ticker_quarter_year"]
             ticker, quarter_year = ticker_quarter_year.split("_")
@@ -296,12 +299,14 @@ class CompanyDescriptionWriter:
             request_body =  {"model": self.openai_model, "messages": messages,"max_tokens": self.max_output_tokens, "temperature": self.temperature, "top_p": self.top_p}
             request = {"custom_id": ticker_quarter_year, "method": "POST", "url": "/v1/chat/completions", "body": request_body}
             requests.append(request)
-        
+
+        requests = remove_duplicate_dicts(requests)
+
         return requests
     
     def create_company_descriptions_batch_job(self, transactions: pd.DataFrame, 
                                                         batch_job_ids_file_path = r"C:\repos\Deep-learning-trj\data\batch_id_list_company_descriptions.jsonl",
-                                                        overwrite_preexisting_batch_jobs=False,
+                                                        overwrite_preexisting_batch_jobs=True,
                                                         max_batch_size = 50000,
                                                         file_name = r"C:\repos\Deep-learning-trj\data\batch_api_file.jsonl",
                                                         pre_existing_company_descriptions_file = r"C:\repos\Deep-learning-trj\data\company_descriptions\company_descriptions.csv"
@@ -309,8 +314,9 @@ class CompanyDescriptionWriter:
         
         """ 
         group by investor, find last transaction and use its previous_transaction_list
-        Must use all current portfolios. 
+        Must use all current portfolios.
         """
+
         # Get last row of previous transaction for each investor
         previous_transactions = transactions.sort_values('report_date').groupby('factset_fund_id').apply(lambda x: json.loads(x.iloc[-1]['previous_transactions']))
 
@@ -321,14 +327,26 @@ class CompanyDescriptionWriter:
         
         prev_portfolios = [stock for portfolio in transactions['portfolio_last_reporting_date'] for stock in portfolio]
 
-        transaction_units = prev_transactions + prev_portfolios
-        
-        company_description_requests = self.create_company_description_requests(transaction_units)
-        
-        # Check if we already have a company description for the given ticker_quarter_year
-        pre_existing_company_descriptions = pd.read_csv(pre_existing_company_descriptions_file)
+        transactions["company_info"] = transactions["company_info"].apply(lambda x : json.loads(x)) 
 
-        company_description_requests = [request for request in company_description_requests if request["custom_id"] not in pre_existing_company_descriptions["ticker_quarter_year"].values]
+        transaction_units = prev_transactions + prev_portfolios + transactions["company_info"].to_list()
+
+        company_description_requests = self.create_company_description_requests(transaction_units)
+
+        # Check if we already have an embedding for the given ticker_quarter_year
+        if os.path.exists(pre_existing_company_descriptions_file) and os.path.getsize(pre_existing_company_descriptions_file) > 0:
+            # File exists and is not empty, proceed with reading the file
+            pre_existing_company_descriptions = pd.read_csv(pre_existing_company_descriptions_file, sep="|")
+        else:
+            # File doesn't exist or is empty, handle the case accordingly (e.g., set to None or an empty DataFrame)
+            pre_existing_company_descriptions = None
+            print(f"File '{pre_existing_company_descriptions_file}' does not exist or is empty.")
+
+        if pre_existing_company_descriptions is not None:
+            company_description_requests = [request for request in company_description_requests if request["custom_id"] not in pre_existing_company_descriptions["ticker_quarter_year"].values]
+        else:
+            # If None, assume no pre-existing descriptions, so all requests are valid
+            company_description_requests = company_description_requests
 
         self.make_batch_job_helper(requests=company_description_requests, batch_job_ids_file_path=batch_job_ids_file_path,
                              is_chat_completion_request=True, file_name=file_name,
@@ -349,9 +367,19 @@ class CompanyDescriptionWriter:
             embeddings_requests.append(request)
         
         # Check if we already have an embedding for the given ticker_quarter_year
-        pre_existing_embeddings = pd.read_csv(pre_existing_embedding_file)
+        if os.path.exists(pre_existing_embedding_file) and os.path.getsize(pre_existing_embedding_file) > 0:
+            # File exists and is not empty, proceed with reading the file
+            pre_existing_embeddings = pd.read_csv(pre_existing_embedding_file, sep="|")
+        else:
+            # File doesn't exist or is empty, handle the case accordingly (e.g., set to None or an empty DataFrame)
+            pre_existing_embeddings = None
+            print(f"File '{pre_existing_embedding_file}' does not exist or is empty.")
 
-        embeddings_requests = [request for request in embeddings_requests if request["custom_id"] not in pre_existing_embeddings["ticker_quarter_year"].values]
+        if pre_existing_embeddings is not None:
+            embeddings_requests = [request for request in embeddings_requests if request["custom_id"] not in pre_existing_embeddings["ticker_quarter_year"].values]
+        else:
+            # If None, assume no pre-existing embeddings, so all requests are valid
+            embeddings_requests = embeddings_requests
 
         self.make_batch_job_helper(requests=embeddings_requests, batch_job_ids_file_path=batch_job_ids_file_path,
                              is_chat_completion_request=False, file_name=file_name,
@@ -405,14 +433,13 @@ class CompanyDescriptionWriter:
             return
         
         try:
-            preexisting_df = pd.read_csv(storage_file)
+            preexisting_df = pd.read_csv(storage_file, sep="|")
         except:
             preexisting_df = None
             
         new_data_list = []
         for i, request_result in enumerate(batch_results):
             custom_id = request_result["custom_id"]
-
             if is_company_description:
                 content = request_result["response"]["body"]["choices"][0]["message"]["content"]
                 content_type = "company_description"
@@ -432,7 +459,6 @@ class CompanyDescriptionWriter:
 
             # Prioritize the 'date_created_left' column but use 'date_created_right' where 'date_created_left' is NaN
             new_data_df["date_created"] = new_data_df["date_created_left"].combine_first(new_data_df["date_created_right"])
-
             # Drop the redundant columns
             new_data_df.drop(columns=["date_created_left", "date_created_right"], inplace=True)
 
@@ -443,9 +469,11 @@ if __name__== "__main__":
     
     writer = CompanyDescriptionWriter()
     
-    #transactions = pd.read_csv(r"C:\repos\Deep-learning-trj\data\transactions\example_transactions.csv")
+    #df = pd.read_csv(r"C:\repos\Deep-learning-trj\data\company_descriptions\company_descriptions.csv", sep="|")
     
-    #writer.create_company_descriptions_batch_job(transactions)
+    # transactions = pd.read_csv(r"C:\repos\Deep-learning-trj\data\transactions\example_transactions.csv")
+
+    # writer.create_company_descriptions_batch_job(transactions)
 
     # batch_results = writer.retrieve_batch_results(r"C:\repos\Deep-learning-trj\data\batch_id_list_company_descriptions.jsonl")
 
@@ -453,20 +481,19 @@ if __name__== "__main__":
     #     writer.store_batch_results(batch_results, is_company_description=True, storage_file=r"C:\repos\Deep-learning-trj\data\company_descriptions\company_descriptions.csv")
 
     ########## Create embeddings batch job ##########
-    #company_descriptions = pd.read_csv(r"C:\repos\Deep-learning-trj\data\company_descriptions\company_descriptions.csv")
-    #writer.create_embeddings_batch_job(company_descriptions)
+    # company_descriptions = pd.read_csv(r"C:\repos\Deep-learning-trj\data\company_descriptions\company_descriptions.csv", sep="|")
+    # writer.create_embeddings_batch_job(company_descriptions)
 
-    # batch_results = writer.retrieve_batch_results(r"C:\repos\Deep-learning-trj\data\batch_id_list_embeddings.jsonl")
-    # writer.store_batch_results(batch_results, is_company_description=False, storage_file=r"C:\repos\Deep-learning-trj\data\company_descriptions\company_description_embeddings.csv")
+    batch_results = writer.retrieve_batch_results(r"C:\repos\Deep-learning-trj\data\batch_id_list_embeddings.jsonl")
+    writer.store_batch_results(batch_results, is_company_description=False, storage_file=r"C:\repos\Deep-learning-trj\data\company_descriptions\company_description_embeddings.csv")
 
     # df = pd.read_csv(r"C:\repos\Deep-learning-trj\data\company_descriptions\company_description_embeddings.csv", sep="|")
     # df['embedding'] = df['embedding'].apply(lambda x: ast.literal_eval(x))
     # df_dict = dict(zip(df['ticker_quarter_year'], df['embedding']))
-    # desired_keys = [
-    # 'ATEA-NO_1Q2024', 'ATEA-NO_2Q2024', 'MOWI-NO_1Q2024', 
-    # 'MOWI-NO_2Q2024', 'SALM-NO_1Q2024', 'SALM-NO_2Q2024', 
-    # 'BOUV-NO_1Q2024', 'BOUV-NO_2Q2024'
-    # ]
+    # desired_keys = ['MOWI-NO_1Q2024', 'MOWI-NO_2Q2024', 'NSIS.B-DK_1Q2024',
+    #                 'NSIS.B-DK_2Q2024', 'SALM-NO_1Q2024', 'SALM-NO_2Q2024',
+    #                 'SALM-NO_3Q2024', 'SCHB-NO_1Q2024', 'SCHB-NO_2Q2024', 'XXL-NO_1Q2024']
 
     # filtered_dict = {key: df_dict[key] for key in desired_keys if key in df_dict}
-    # plot_tsne_2d(filtered_dict)
+
+
