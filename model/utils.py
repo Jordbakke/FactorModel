@@ -212,7 +212,6 @@ class Transformer(nn.Module):
 
         def forward(self, encoder_input, decoder_input, is_causal):
             encoder_output = self.encoder(encoder_input)
-            print("encoder output: ", encoder_output.shape)
             decoder_output = self.decoder(encoder_output=encoder_output, decoder_input=decoder_input,
                                           is_causal=is_causal)
             

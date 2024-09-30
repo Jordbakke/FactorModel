@@ -24,7 +24,7 @@ class CompanyEmbeddingModel(nn.Module):
                                                         company_description_embedding) #(batch_size, 1, embedding_dim)
         company_embedding = torch.cat([company_embedding, fixed_company_features_batch], dim=-1)
         #add company features horizontally
-        return company_embedding
+        return company_embedding.permute(1, 0, 2)
     
 if __name__ == "__main__":
     embedding_dim = 6
@@ -56,7 +56,6 @@ if __name__ == "__main__":
     attention_dropout_prob=0.1
     batch_first=True
     num_encoder_blocks=3
-    force_inner_dimensions=False
     max_seq_len=1000
     prepend_embedding_vector=True
     fundamentals_model = FundamentalsModel(embedding_dim=embedding_dim,
@@ -64,7 +63,7 @@ if __name__ == "__main__":
                                         num_ffnn_hidden_layers=num_ffnn_hidden_layers,
                                         activation_function=activation_function, ffnn_dropout_prob=ffnn_dropout_prob,
                                         attention_dropout_prob=attention_dropout_prob, batch_first=batch_first,
-                                        num_encoder_blocks=num_encoder_blocks, force_inner_dimensions=force_inner_dimensions,
+                                        num_encoder_blocks=num_encoder_blocks,
                                         max_seq_len=max_seq_len, prepend_embedding_vector=prepend_embedding_vector)
 
     hidden_dim = 1536

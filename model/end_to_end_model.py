@@ -14,10 +14,11 @@ from utils import PositionalEncoding
 from torch import nn
 
 class EndToEndModel(nn.Module):
-    def __init__(self, company_embedding_model, company_embedding_model_output_dim, prev_trans_portf_model, next_transaction_model, max_companies_sequence_len=1000):
+    def __init__(self, company_embedding_model, company_embedding_model_output_dim, prev_trans_portf_model_embedding_dim, prev_trans_portf_model, next_transaction_model, max_companies_sequence_len=1000):
         super(EndToEndModel, self).__init__()
         self.company_embedding_model = company_embedding_model
-        self.positional_encoding = PositionalEncoding(embedding_dim=company_embedding_model_output_dim, max_seq_len=max_companies_sequence_len)
+        self.linear_projection = nn.Linear(company_embedding_model_output_dim, prev_trans_portf_model_embedding_dim)
+        self.positional_encoding = PositionalEncoding(embedding_dim=prev_trans_portf_model_embedding_dim, max_seq_len=max_companies_sequence_len)
         self.prev_trans_portf_model = prev_trans_portf_model
         self.next_transaction_model = next_transaction_model
 
@@ -31,6 +32,7 @@ class EndToEndModel(nn.Module):
             previous_transactions_embeddings = self.company_embedding_model(previous_transactions_price_batch, previous_transactions_fundamentals_batch,
                                                                       previous_transactions_company_description_batch,
                                                                       previous_transactions_fixed_company_features_batch)
+            previous_transactions_embeddings = self.linear_projection(previous_transactions_embeddings)
             previous_transactions_embeddings = self.positional_encoding(previous_transactions_embeddings) # Add positional encoding to previous transactions (not needed for portfolio companies or target transactions)
             print(f"Previous transactions embeddings shape: {previous_transactions_embeddings.shape}")
 
@@ -41,13 +43,14 @@ class EndToEndModel(nn.Module):
             portfolio_companies_embeddings = self.company_embedding_model(portfolio_companies_price_batch, portfolio_companies_fundamentals_batch,
                                                                     portfolio_companies_company_description_batch,
                                                                     portfolio_companies_fixed_company_features_batch)
+            portfolio_companies_embeddings = self.linear_projection(portfolio_companies_embeddings)
             print(f"Portfolio companies embeddings shape: {portfolio_companies_embeddings.shape}")
 
             # Interaction between previous transactions and portfolio companies
             prev_trans_portf_output = self.prev_trans_portf_model(previous_transactions_embeddings, portfolio_companies_embeddings, is_causal=False)
             print(f"Prev_trans_portf output shape: {prev_trans_portf_output.shape}")
             # Use the output of the previous transactions and portfolio companies interaction to predict the next transaction
-            predicted_transaction = self.next_transaction_model(target_transactions_data)
+            predicted_transaction = self.next_transaction_model(prev_trans_portf_output)
             print(f"Predicted transaction shape: {predicted_transaction.shape}")
             # Create company embeddings the target companies
 
@@ -59,6 +62,7 @@ class EndToEndModel(nn.Module):
                                                                               target_transactions_fundamentals_batch,
                                                                         target_transactions_company_description_batch,
                                                                         target_transactions_fixed_company_features_batch)
+            target_transactions_embeddings = self.linear_projection(target_transactions_embeddings)
             print(f"Target transactions embeddings shape: {target_transactions_embeddings.shape}")
             return predicted_transaction, target_transactions_embeddings
     
@@ -74,7 +78,7 @@ if __name__ == "__main__":
                                         num_ffnn_hidden_layers=2,
                                         activation_function=nn.GELU, ffnn_dropout_prob=0.1,
                                         attention_dropout_prob=0.1, batch_first=True,
-                                        num_encoder_blocks=3, force_inner_dimensions=False,
+                                        num_encoder_blocks=3,
                                         max_seq_len=1000, prepend_embedding_vector=True)
 
     company_desciption_model = CompanyDescriptionModel(hidden_dim=1536, num_hidden_layers=2,
@@ -87,17 +91,17 @@ if __name__ == "__main__":
     company_embedding_model = CompanyEmbeddingModel(price_model, fundamentals_model,
                                                 company_desciption_model, head_combination_model)
 
-    prev_trans_portf_model = PreviousTransactionsPortfolioModel(embedding_dim=1543, num_heads=2, ffnn_hidden_dim=2048,
+    prev_trans_portf_model = PreviousTransactionsPortfolioModel(embedding_dim=1544, num_heads=2, ffnn_hidden_dim=2048,
                                                  num_ffnn_hidden_layers=3, ffnn_dropout_prob=0.1,
                                                  attention_dropout_prob=0.1, activation_function=nn.GELU, batch_first=True,
-                                                 num_encoder_blocks=3, num_decoder_blocks=3, force_inner_dimensions=True)
+                                                 num_encoder_blocks=3, num_decoder_blocks=3)
 
     next_transaction_model = NextTransactionsModel(embedding_dim=1544, num_heads=2, ffnn_hidden_dim=2048,
                                                    num_ffnn_hidden_layers=3, ffnn_dropout_prob=0.1,
                                                     attention_dropout_prob=0.1, activation_function=nn.GELU, batch_first=True,
-                                                    num_encoder_blocks=3, force_inner_dimensions=False)
+                                                    num_encoder_blocks=3)
     
-    model = EndToEndModel(company_embedding_model=company_embedding_model, company_embedding_model_output_dim=1543,
+    model = EndToEndModel(company_embedding_model=company_embedding_model, company_embedding_model_output_dim=1543, prev_trans_portf_model_embedding_dim=1544,
                           prev_trans_portf_model=prev_trans_portf_model, next_transaction_model=next_transaction_model)
 
     custom_dataset = CustomDataset(prices_csv=r"C:\repos\Deep-learning-trj\data\monthly_prices\example_prices.csv",
