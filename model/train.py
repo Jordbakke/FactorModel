@@ -1,54 +1,86 @@
 import os
 import sys
 import torch
+import custom_loss_functions
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from end_to_end_model import EndToEndModel
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from data.custom_dataset import CustomDataset
 
-def train(company_embedding_model, transaction_prediction_model, loss_fn, custom_dataset, num_epochs, lr, weight_decay, device, save_path, batch_size=None):
+def plot_training_loss(training_loss:dict):
+    # Extract keys and values from the dictionary
+    x_values = list(training_loss.keys())
+    y_values = list(training_loss.values())
+    
+    # Create the line plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, y_values, marker='o')
+  
+    plt.xlabel('Iteration Count')
+    plt.ylabel('Avg Training Loss')
+    plt.title('Training loss vs iteration count')
+
+    plt.grid(True)
+    plt.show()
+
+def train(end_to_end_model, custom_dataset, device, loss_fn=custom_loss_functions.MinEuclideanLoss,
+          num_epochs=10,lr=1e-4, weight_decay=1e-4, batch_size=None,
+          save_path=r"C:\repos\Deep-learning-trj\model\saved_model.pth", loss_display_frequency=10000):
 
     dataloader = DataLoader(custom_dataset, batch_size=batch_size, shuffle=True)
-    optimizer = torch.optim.Adam(list(company_embedding_model.parameters()) + list(transaction_prediction_model.parameters()), lr=lr, weight_decay=weight_decay)
+    optimizer = torch.optim.Adam(end_to_end_model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    end_to_end_model = end_to_end_model.to(device)
+
+    training_loss = {}
+    total_loss = 0.0
+    iteration_count = 0
 
     for epoch in range(num_epochs):
-        
-        for previous_transaction_companies_data, portfolio_companies_data, target_companies_data in tqdm(dataloader):
-            previous_transactions_price_batch = previous_transaction_companies_data['price']
-            previous_transactions_fundamentals_batch = previous_transaction_companies_data['fundamentals']
-            previous_transactions_company_description_batch = previous_transaction_companies_data['company_description']
-            previous_transactions_fixed_company_features_batch = previous_transaction_companies_data['fixed_company_features']
-            previous_transactions_embeddings = company_embedding_model(previous_transactions_price_batch, previous_transactions_fundamentals_batch,
-                                                                      previous_transactions_company_description_batch,
-                                                                      previous_transactions_fixed_company_features_batch)
-            
-            portfolio_companies_price_batch = portfolio_companies_data['price']
-            portfolio_companies_fundamentals_batch = portfolio_companies_data['fundamentals']
-            portfolio_companies_company_description_batch = portfolio_companies_data['company_description']
-            portfolio_companies_fixed_company_features_batch = portfolio_companies_data['fixed_company_features']
-            portfolio_companies_embeddings = company_embedding_model(portfolio_companies_price_batch, portfolio_companies_fundamentals_batch,
-                                                                    portfolio_companies_company_description_batch,
-                                                                    portfolio_companies_fixed_company_features_batch)
-            
-            target_transactions_price_batch = target_companies_data['price']
-            target_transactions_fundamentals_batch = target_companies_data['fundamentals']
-            target_transactions_company_description_batch = target_companies_data['company_description']
-            target_transactions_fixed_company_features_batch = target_companies_data['fixed_company_features']
-            target_transactions_embeddings = company_embedding_model(target_transactions_price_batch,
-                                                                              target_transactions_fundamentals_batch,
-                                                                        target_transactions_company_description_batch,
-                                                                        target_transactions_fixed_company_features_batch)
-            
-            predicted_transaction = transaction_prediction_model(previous_transactions_embeddings, portfolio_companies_embeddings)
-            
-            future_transaction_companies_embeddings = future_transaction_companies_embeddings.squeeze(1)
+        print(f"Epoch {epoch + 1}/{num_epochs}")
+        end_to_end_model.train()  # Set model to training mode
+        epoch_loss = 0.0
+        # Progress bar for tracking training progress
+        for i, batch in enumerate(tqdm(dataloader, desc="Training Batches")):
+            # Load tensor to device
+            previous_transaction_companies_data, portfolio_companies_data, target_transactions_data = batch
+            previous_transaction_companies_data = {key: value.to(device) for key, value in previous_transaction_companies_data.items()}
+            portfolio_companies_data = {key: value.to(device) for key, value in portfolio_companies_data.items()}
+            target_transactions_data = {key: value.to(device) for key, value in target_transactions_data.items()}
 
-            loss = loss_fn(predicted_transaction, future_transaction_companies_embeddings)
             optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            transaction_prediction, target_transaction_embeddings = end_to_end_model(previous_transaction_companies_data,
+                                                      portfolio_companies_data,
+                                                      target_transactions_data)
+
+            loss = loss_fn(transaction_prediction, target_transaction_embeddings)
+            loss.backward() #backward prop to find the partial derivatives
+            optimizer.step() #Iteratve through model parameters and update based on their gradient attribute set by loss.backward()
             
+            total_loss += loss.item()
+            iteration_count += 1
+
+            # Log the loss every ith iteration
+            if iteration_count % loss_display_frequency == 0:
+                avg_loss = total_loss / iteration_count
+                training_loss[iteration_count] = avg_loss
+                plot_training_loss(training_loss)
+
+            epoch_loss += loss.item()
+        
+        epoch_loss /= len(dataloader)
+        print(f"Epoch {epoch + 1} Loss: {epoch_loss:.4f}")
+
+        if epoch_loss < best_loss:
+            best_loss = epoch_loss
+            torch.save(end_to_end_model.state_dict(), save_path)
+
+    print("Training complete.")
+
+    return training_loss
 
 
+            
 
       

@@ -14,7 +14,6 @@ class CompanyEmbeddingModel(nn.Module):
         self.company_description_model = company_description_model
         self.head_combination_model = head_combination_model
         
-
     def forward(self, price_batch, fundamentals_batch, company_description_batch, fixed_company_features_batch):
         price_embedding = self.price_model(price_batch)[:, 0:1, :] #0:1 to avoid unsqueeze(1) at the end
         fundamentals_embedding = self.fundamentals_model(fundamentals_batch)[:, 0:1, :]

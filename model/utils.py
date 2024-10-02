@@ -239,7 +239,10 @@ class HeadCombinationLayer(nn.Module):
         aligned_tensors = []
         for i, arg in enumerate(args):
             aligned_tensors.append(self.linear_projections[i](arg))
+
         stacked_tensors = torch.stack(aligned_tensors, dim=1).squeeze()
+        if stacked_tensors.dim() == 2: #happens when num transactions/companies is 1
+            stacked_tensors = stacked_tensors.unsqueeze(0)
         stacked_tensors = self.prepend_embedding_vector(stacked_tensors)
         stacked_tensors = self.multi_head_attention(stacked_tensors)
         result = stacked_tensors[:, 0:1, :]
