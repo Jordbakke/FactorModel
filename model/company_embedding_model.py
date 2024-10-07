@@ -14,11 +14,21 @@ class CompanyEmbeddingModel(nn.Module):
         self.company_description_model = company_description_model
         self.head_combination_model = head_combination_model
         
-    def forward(self, price_batch, fundamentals_batch, company_description_batch, fixed_company_features_batch):
-        price_embedding = self.price_model(price_batch)[:, 0:1, :] #0:1 to avoid unsqueeze(1) at the end
-        fundamentals_embedding = self.fundamentals_model(fundamentals_batch)[:, 0:1, :]
+    def forward(self, price_batch, fundamentals_batch, company_description_batch, fixed_company_features_batch,
+                price_layer_normalization=False, fundamentals_layer_normalization=False,
+                key_padding_mask_price_batch=None,
+                key_padding_mask_fundamentals_batch=None):
+        
+        price_cls_vector = self.price_model(price_batch, layer_normalization=price_layer_normalization,
+                                           key_padding_mask=key_padding_mask_price_batch
+                                           ) #0:1 to avoid unsqueeze(1) at the end
+        
+        fundamentals_embedding = self.fundamentals_model(fundamentals_batch, layer_normalization=fundamentals_layer_normalization,
+                                                         key_padding_mask=key_padding_mask_fundamentals_batch
+                                                         )[:, 0:1, :]
+        
         company_description_embedding = self.company_description_model(company_description_batch)[:, 0:1, :]
-        company_embedding = self.head_combination_model(price_embedding,
+        company_embedding = self.head_combination_model(price_cls_vector,
                                                         fundamentals_embedding,
                                                         company_description_embedding) #(batch_size, 1, embedding_dim)
         company_embedding = torch.cat([company_embedding, fixed_company_features_batch], dim=-1)
@@ -36,14 +46,14 @@ if __name__ == "__main__":
     batch_first = True
     num_encoder_blocks = 3
     max_seq_len = 1000
-    prepend_embedding_vector = True
+    prepend_cls_vector = True
 
     price_batch = torch.ones(2, 10, 2)
     price_model = PriceModel(embedding_dim=embedding_dim, num_heads=num_heads, ffnn_hidden_dim=ffnn_hidden_dim,
                             num_ffnn_hidden_layers=num_ffnn_hidden_layers, activation_function=activation_function,
                             ffnn_dropout_prob=ffnn_dropout_prob, attention_dropout_prob=attention_dropout_prob,
                             batch_first=batch_first, num_encoder_blocks=num_encoder_blocks,
-                            max_seq_len=max_seq_len, prepend_embedding_vector=prepend_embedding_vector)
+                            max_seq_len=max_seq_len, prepend_cls_vector=prepend_cls_vector)
 
     #Create Fundamentals Model
     embedding_dim = 124
@@ -56,14 +66,14 @@ if __name__ == "__main__":
     batch_first=True
     num_encoder_blocks=3
     max_seq_len=1000
-    prepend_embedding_vector=True
+    prepend_cls_vector=True
     fundamentals_model = FundamentalsModel(embedding_dim=embedding_dim,
                                         num_heads=num_heads, ffnn_hidden_dim=ffnn_hidden_dim,
                                         num_ffnn_hidden_layers=num_ffnn_hidden_layers,
                                         activation_function=activation_function, ffnn_dropout_prob=ffnn_dropout_prob,
                                         attention_dropout_prob=attention_dropout_prob, batch_first=batch_first,
                                         num_encoder_blocks=num_encoder_blocks,
-                                        max_seq_len=max_seq_len, prepend_embedding_vector=prepend_embedding_vector)
+                                        max_seq_len=max_seq_len, prepend_cls_vector=prepend_cls_vector)
 
     hidden_dim = 1536
     num_hidden_layers = 2 

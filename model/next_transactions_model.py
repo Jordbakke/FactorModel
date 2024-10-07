@@ -10,7 +10,7 @@ class NextTransactionsModel(nn.Module):
                 num_encoder_blocks=3):
         super(NextTransactionsModel, self).__init__()
 
-        self.prepend_embedding_vector = utils.PrependEmbeddingVector(embedding_dim)
+        self.prepend_cls_vector = utils.PrependClsVector(embedding_dim)
         self.encoder = utils.Encoder(embedding_dim=embedding_dim, num_heads=num_heads, ffnn_hidden_dim=ffnn_hidden_dim,
                                         num_ffnn_hidden_layers=num_ffnn_hidden_layers, ffnn_dropout_prob=ffnn_dropout_prob,
                                         attention_dropout_prob=attention_dropout_prob, activation_function=activation_function,
@@ -20,10 +20,13 @@ class NextTransactionsModel(nn.Module):
         self.ffnn = utils.FFNN(embedding_dim=embedding_dim, hidden_dim=ffnn_hidden_dim, output_dim=embedding_dim,
                                num_hidden_layers=num_ffnn_hidden_layers, dropout_prob=ffnn_dropout_prob)
 
-    def forward(self, x):
+    def forward(self, x, layer_normalization=True, key_padding_mask=None):
         # x is the output of the prev_trans_portf_model
-        x = self.prepend_embedding_vector(x)
-        predicted_transaction = self.encoder(x)[:, 0:1, :]
+        x = self.prepend_cls_vector(x)
+        if key_padding_mask is not None: #add attention mask for the newly added cls vector.
+            key_padding_mask = torch.cat([torch.zeros(key_padding_mask.shape[0], 1, dtype=key_padding_mask.dtype), key_padding_mask], dim=1)
+        predicted_transaction = self.encoder(x, layer_normalization=layer_normalization,
+                                             key_padding_mask=key_padding_mask)[:, 0:1, :]
         predicted_transaction = self.ffnn(predicted_transaction)
         return predicted_transaction
 
