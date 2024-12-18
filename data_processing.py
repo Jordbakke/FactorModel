@@ -29,20 +29,21 @@ USER_MESSAGES = {
     "intra_sector_differentiator": {"role": "user", "content": """Write a description of how the business model of {} with ticker {} differs from other companies and competitors in the same sector/industry as of {} {}."""},
     "business_model_generator": {"role": "user", "content": """Write a description of the business model of {} with ticker {} as of {} {}. The business model description shall include the following aspects:
                                
-Value Proposition: What problem does the company solve and how does it solve it?
-Product Offering: Description of the company's product(s) or service(s). If it is assets the company offers, write the assets' type name, specialization, and age composition. Do not use company specific product names.
-Revenue Model: Description of how the company generates revenue and its primary revenue sources, such as one-time product sales or recurring revenue. Do not use company specific product names.
-Product Lifetime Cycle: What stage of the lifetime cycle is/are the company's product(s) in: development, introduction, growth, maturity, saturation or decline? Do not use company specific product name(s). List the product type(s) and their respective stages as bullet points.
-Product Type Long-Term Growth: Will the market for the company's product type(s) grow faster, slower or at the same pace as the economoy in the long-term? List the product type(s) and their respective growth rates as bullet points. Do not use company specific product name(s).
 Sector and Supply Chain Position: Which sector does the company operate in, and what role does the company have in the supply chain?
-Customer Segments: Description of customer segment(s). Go deep into the customer base and identify what kind of customers the company serves. List the customer segment(s) as bullet points.
-Industry Sub-Segment: Decription of the industry sub-segment(s) the company's product(s) serves. Go deep into the market to reach the granular sub-segment(s). Do not write about customer types and you can absolutely not write sub-segment(s) the company does not serve. Do not use company specific product names. List the sub-segments as bullet points. If it's just one sub-segment, write it as a single bullet point.
+Business Areas: Description of the company's business area(s). Write hierachically, starting with the most important business area. Do not use company specific product name(s).
+Business Sub-Segment: Decription of the sub-segment(s) the company's product(s) serves. Go deeper into the business area(s) to reach the granular sub-segment(s). Do not write about customer types and you can absolutely not write sub-segment(s) the company does not serve. Do not use company specific product names. List the sub-segments as bullet points. If it's just one sub-segment, write it as a single bullet point.
+Product Offering: Granular description of the company's product(s) or service(s) and what purpose they serve. If the company offers capital assets describe their technological specialization, their target segment, and the age composition of the capital assets the company offers. Do not use company specific product names.
+Revenue Model: Description of how the company generates revenue and its primary revenue sources. Do not use company specific product names.
+Customer Segments: Description of customer segment(s). Go deep into the customer base and identify what kind of customers the company serves. List the customer segment(s) as bullet point(s).
+Market Position: Short description of the company's market position compared to competitors.
 Cost Structure: What are the company's 3 most important cost drivers? Write about the services, components and materials the company uses to provide its own product(s) or service(s) rather than broad cost categories, such as "manufacturing costs". Go deep into the cost structure to reach the granular cost drivers. When applicable, name the specific commodities and components. List the cost drivers as as bullet points.
 Geographic Regions: The key geographic region(s) where the company generates significant revenue. You can absolutely not write regions in which the company does not generate significant revenue. List the region(s) as bullet point(s). If it's just one sub-segment, write it as a single bullet point.
 Risk: Description of the 2 key risk factors. Don't mention competition. List them as bullet points.
 Market Growth Drivers: What are the key drivers of market growth for the company's product(s) or service(s)? List them as bullet points.
-Strengths: What are the key strengths of the business? It is extremely important that you do not hallucinate or make up strengths. Be strictly factual. List them as bullet points. 
-Weaknesses: What are the key weaknesses of the business? It is extremely important that you do not hallucinate or make up weaknesses. Be strictly factual. List them as bullet points.
+Strengths: What are the key strengths of the business compared to competitors? It is extremely important that you do not hallucinate or make up strengths. Be strictly factual. List them as bullet points. 
+Weaknesses: What are the key weaknesses of the business compared to competitors? It is extremely important that you do not hallucinate or make up weaknesses. Be strictly factual. List them as bullet points.
+
+Describe only what was known up to that time, with absolutely no information or insights from beyond the year and quarter date. Write in present tense, as if you went back in time to the end of the given year and quarter and wrote the business description at that time.
 """
 }
 }
