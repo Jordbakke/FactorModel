@@ -23,12 +23,6 @@ class CompanyEmbeddingModel(nn.Module):
                 company_features_tensor_batch, company_description_input_ids_batch, company_description_key_padding_mask_batch,
                 macro_tensor_batch, macro_key_padding_mask_batch):
         
-        print("Macro tensor shape: ", macro_tensor_batch.shape)
-        print("Price tensor shape: ", price_tensor_batch.shape)
-        print("Fundamentals tensor shape: ", fundamentals_tensor_batch.shape)
-        print("Company features tensor shape: ", company_features_tensor_batch.shape)
-        print("Company description tensor shape: ", company_description_input_ids_batch.shape)
-        
         macro_cls_tensor = self.macro_model(macro_tensor_batch, layer_normalization=True, key_padding_mask=macro_key_padding_mask_batch)
         price_cls_tensor1 = self.price_model(price_tensor_batch, layer_normalization=True, key_padding_mask=price_key_padding_mask_batch)
         fundamentals_cls_tensor1 = self.fundamentals_model(fundamentals_tensor_batch, missing_features_mask=fundamentals_missing_features_mask_batch,
