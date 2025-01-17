@@ -1,7 +1,4 @@
 import torch
-import os
-current_dir = os.path.dirname(__file__)
-project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
 from ml_code.data_processing.data_utils import load_tensor
 from torch.utils.data import Dataset
 
